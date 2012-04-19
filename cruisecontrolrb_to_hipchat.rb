@@ -53,7 +53,7 @@ class CruisecontrolrbToHipchat < Sinatra::Base
         message
       end
     rescue Exception => e
-        Hipchat.new.hip_post "Error occured polling Cruise Control at #{ENV["CC_URL"]}", color     
+        Hipchat.new.hip_post "Error occured polling Cruise Control at #{ENV["CC_URL"]}", "red"     
     end     
   end
   
