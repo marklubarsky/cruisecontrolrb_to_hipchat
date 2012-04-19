@@ -26,34 +26,39 @@ class CruisecontrolrbToHipchat < Sinatra::Base
         unless status_hash.empty?        
 
           last_project = @last_known_projects[status_hash[:name]]
-          last_status, last_activity, sent_on = last_project.nil? ? [nil, nil, nil] : [last_project[:activity], last_project[:status], last_project[:sent_on]]
+          
+          last_status, last_activity, changed_on = last_project.nil? ? [nil, nil, nil] : [last_project[:status], last_project[:activity], last_project[:changed_on]]
 
           if status_hash[:activity] == "Building" and last_activity != "Building"
             message << "CruiseControl has started a build #{status_hash[:name]}:+#{status_hash[:link_to_build]}."
+            status_hash[:changed_on] = Time.now
             color = "yellow"
           # there might be a more clever way to structure this.
           elsif last_project.nil?  
             message << "Detected a new build #{status_hash[:name]} with a current status:+#{status_hash[:link_to_build]}"          
-          elsif last_activity == "Building" and status_hash[:activity] != "Building"                   
-            message << "The build #{status_hash[:name]} has changed the status:+#{status_hash[:link_to_build]}"          
-          elsif last_activity == status_hash[:activity] and last_status == status_hash[:status] and (Time.now - sent_on) > @idle_interval
-            message << "The build #{status_hash[:name]} has NOT changed the status +#{status_hash[:link_to_build]} since #{sent_on.to_s}. Maybe you should remove it?}"            
-          elsif (Time.now - sent_on) > @refresh_interval
+            status_hash[:changed_on] = Time.now
+          elsif status_hash[:activity] != "Building"  and last_activity == "Building"                 
+            message << "The build #{status_hash[:name]} was #{last_activity} and is now #{status_hash[:activity]} and has changed the status:+#{status_hash[:link_to_build]}"          
+            status_hash[:changed_on] = Time.now
+          elsif !changed_on.nil? and last_activity == status_hash[:activity] and last_status == status_hash[:status] and (Time.now - changed_on) > @idle_interval
+            message << "The build #{status_hash[:name]} is still #{status_hash[:activity]} and has NOT changed the status +#{status_hash[:link_to_build]} since #{changed_on.to_s}. Maybe you should remove it?}"            
+          elsif !changed_on.nil? and (Time.now - changed_on) > @refresh_interval
             message << "The build #{status_hash[:name]} is currenty #{status_hash[:activity]} and has a status:+#{status_hash[:link_to_build]}"            
+            status_hash[:changed_on] = Time.now
           end
         end
 
         color = status_hash[:lastBuildStatus] == "Success" ? "green" : "red" unless color == "yellow"
 
-        Hipchat.new.hip_post  message, color unless message == ""
+        Hipchat.new.hip_post message, color unless message == ""
 
-        status_hash[:sent_on] = Time.now
         @last_known_projects[status_hash[:name]] = status_hash
 
         message
       end
     rescue Exception => e
-        Hipchat.new.hip_post "Error occured polling Cruise Control at #{ENV["CC_URL"]}", "red"     
+        link_to_cc = "<a href='http://#{ENV["CC_URL"]}'>http://#{ENV["CC_URL"]}</a>"        
+        Hipchat.new.hip_post "Error occured polling Cruise Control (#{e.message}) at #{link_to_cc}", "red"     
     end     
   end
   
